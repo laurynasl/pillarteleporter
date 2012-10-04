@@ -14,11 +14,13 @@ public class mod_KudliusTeleporter extends BaseMod
     {
     }
 
+    @Override
     public String getVersion()
     {
-        return "1.2.5";
+        return "1.3.2";
     }
 
+    @Override
     public void load()
     {
         try {
@@ -27,12 +29,13 @@ public class mod_KudliusTeleporter extends BaseMod
 
             // id for teleportation key
             int itemTeleportationKeyID = generateOrLoadItemID("teleportation_key");
-            teleportationKey = (new ItemTeleportationKey(itemTeleportationKeyID)).setIconCoord(11, 6).setItemName("teleportationKey");
+            teleportationKey = new ItemTeleportationKey(itemTeleportationKeyID).setItemName("teleportationKey");
+            teleportationKey.iconIndex = ModLoader.addOverride("/gui/items.png", "/gui/teleportationKey.png");
             ModLoader.addName(teleportationKey, "Teleportation Key");
 
             // teleportation key creation recipe
             ModLoader.addRecipe(new ItemStack(teleportationKey), new Object[]{"O", "T", Character.valueOf('O'), Item.enderPearl, Character.valueOf('T'), Block.torchRedstoneActive});
-            //ModLoader.addRecipe(new ItemStack(teleportationKey), new Object[]{"O", "T", Character.valueOf('O'), Block.sapling, Character.valueOf('T'), Item.stick});
+            ModLoader.addRecipe(new ItemStack(teleportationKey), new Object[]{"O", "T", Character.valueOf('O'), Block.sapling, Character.valueOf('T'), Item.stick});
 
             saveConfig();
         }
@@ -71,7 +74,7 @@ public class mod_KudliusTeleporter extends BaseMod
 
     // copied from ModLoader
 
-    public static void loadConfig()
+    private static void loadConfig()
         throws IOException
     {
         cfgdir.mkdir();
@@ -87,7 +90,7 @@ public class mod_KudliusTeleporter extends BaseMod
         }
     }
 
-    public static void saveConfig()
+    private static void saveConfig()
         throws IOException
     {
         cfgdir.mkdir();

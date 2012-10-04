@@ -2,6 +2,7 @@ package net.minecraft.src;
 
 import java.io.*;
 import java.util.Properties;
+import net.minecraft.client.Minecraft;
 
 public class ItemTeleportationKey extends Item
 {
@@ -10,23 +11,30 @@ public class ItemTeleportationKey extends Item
         super(i);
     }
 
-    public boolean onItemUse(ItemStack itemstack, EntityPlayer entityplayer, World world, int i, int j, int k, int l)
+    @Override
+    public boolean onItemUse(ItemStack itemstack, EntityPlayer entityplayer, World world, int i, int j, int k, int l, float par8, float par9, float par10)
     {
+        if (world instanceof WorldClient) {
+            System.out.println("current world is instance of WorldClient. returning from onItemUse");
+            return false;
+        }
         System.out.println(new StringBuilder().append("teleportation key used! i=").append(i).append(", j=").append(j).append(", k=").append(k).append(", l=").append(l).toString());
 
         TileEntity tileentity = world.getBlockTileEntity(i, j, k);
         if ((tileentity != null) && (tileentity instanceof TileEntitySign)) {
-          System.out.println(new StringBuilder().append("metadata: ").append(world.getBlockMetadata(i, j, k)).toString());
-          TileEntitySign sign = (TileEntitySign) tileentity;
-          for (int a = 0; a < sign.signText.length; a++)
-          {
-              System.out.println(sign.signText[a]);
-          }
-          tryToTeleport(sign, entityplayer, world, i, j, k, l);
+            System.out.println(new StringBuilder().append("metadata: ").append(world.getBlockMetadata(i, j, k)).toString());
+            TileEntitySign sign = (TileEntitySign) tileentity;
+            for (int a = 0; a < sign.signText.length; a++)
+            {
+                System.out.println(sign.signText[a]);
+            }
+            tryToTeleport(sign, entityplayer, world, i, j, k, l);
         }
         return false;
     }
 
+    /*
+    @Override
     public ItemStack onItemRightClick(ItemStack itemstack, World world, EntityPlayer entityplayer)
     {
         System.out.println(new StringBuilder().append("teleportation key right clicked!").toString());
@@ -48,95 +56,120 @@ public class ItemTeleportationKey extends Item
 
         return itemstack;
     }
+    */
 
-    public File getSaveDirectory(World world) {
-      try {
-        SaveHandler saveHandler = (SaveHandler) ModLoader.getPrivateValue(MapStorage.class, world.mapStorage, 0); //"saveHandler"
-        File saveDirectory = (File) ModLoader.getPrivateValue(SaveHandler.class, saveHandler, 1); //"saveDirectory"
-        return saveDirectory;
-      }
-      catch(NoSuchFieldException e) {
-        System.out.println("no such field exception");
-        return null;
-      }
+    private File getSaveDirectory(World world) {
+        try {
+            SaveHandler saveHandler = (SaveHandler) ModLoader.getPrivateValue(MapStorage.class, world.mapStorage, 0); //"saveHandler"
+            if (saveHandler == null) {
+                System.out.println("saveHandler is null");
+                if (world instanceof WorldClient) {
+                    System.out.println("WorldClient had that null issue");
+                }
+                else if (world instanceof WorldServer) {
+                    System.out.println("WorldServer had that null issue");
+                }
+                return null;
+            }
+            else {
+                System.out.println("saveHandler looks ok");
+            }
+            //File saveDirectory = new File(Minecraft.getMinecraftDir(), "/saves/" + saveHandler.getSaveDirectoryName());
+            File saveDirectory = (File) ModLoader.getPrivateValue(SaveHandler.class, saveHandler, 1); //"saveDirectory"
+            return saveDirectory;
+        }
+        catch(NoSuchFieldException e) {
+            System.out.println("no such field exception");
+            return null;
+        }
     }
 
-    private boolean ensureLocationsAreLoaded(World world, TileEntitySign sign) {
-      File dir = getSaveDirectory(world);
-      if (dir.getPath() == currentSaveDirName) {
+    private boolean ensureLocationsAreLoaded(World world, EntityPlayer entityplayer) {
+        File dir = getSaveDirectory(world);
+        if (dir == null) {
+            return false;
+        }
+        if (dir.getPath() == currentSaveDirName) {
+            return true;
+        }
+        currentSaveDirName = dir.getPath();
+        System.out.println("Save dir name: " + currentSaveDirName);
+
+        File file = new File(dir, "KudliusTeleporter.teleportLocations.cfg");
+        try {
+            if(!file.exists())
+            {
+                file.createNewFile();
+            }
+            if(file.canRead())
+            {
+                FileInputStream fileinputstream = new FileInputStream(file);
+                teleportLocations.load(fileinputstream);
+                fileinputstream.close();
+            }
+        }
+        catch(IOException e) {
+            //System.out.println("IO exception while loading locations");
+            entityplayer.addChatMessage("IO exception while loading locations");
+            return false;
+        }
         return true;
-      }
-      currentSaveDirName = dir.getPath();
-
-      File file = new File(dir, "KudliusTeleporter.teleportLocations.cfg");
-      try {
-        if(!file.exists())
-        {
-           file.createNewFile();
-        }
-        if(file.canRead())
-        {
-            FileInputStream fileinputstream = new FileInputStream(file);
-            teleportLocations.load(fileinputstream);
-            fileinputstream.close();
-        }
-      }
-      catch(IOException e) {
-        //System.out.println("IO exception while loading locations");
-        signFeedback(sign, "IO exception while loading locations");
-        return false;
-      }
-      return true;
     }
 
-    private void saveLocations(World world, TileEntitySign sign, int distance) {
-      File dir = getSaveDirectory(world);
-      File file = new File(dir, "KudliusTeleporter.teleportLocations.cfg");
-      // of course file exists
-      try {
-        FileOutputStream fileoutputstream = new FileOutputStream(file);
-        teleportLocations.store(fileoutputstream, "KudliusTeleporter locations");
-        fileoutputstream.close();
-      }
-      catch(IOException e) {
-        //System.out.println("IO exception while saving locations");
-        signFeedback(sign, "IO exception while saving locations");
-        return;
-      }
-      //System.out.println("locations saved successfully!");
-      sign.signText[2] = new StringBuilder().append("Distance: ").append(distance).toString();
-      signFeedback(sign, "Activated");
+    private void saveLocations(World world, TileEntitySign sign, EntityPlayer entityplayer, int distance) {
+        File dir = getSaveDirectory(world);
+        if (dir == null) {
+            System.out.println("failed to save locations - dir not found");
+        }
+        else {
+            System.out.println("locations saved");
+        }
+        File file = new File(dir, "KudliusTeleporter.teleportLocations.cfg");
+        // of course file exists
+        try {
+            FileOutputStream fileoutputstream = new FileOutputStream(file);
+            teleportLocations.store(fileoutputstream, "KudliusTeleporter locations");
+            fileoutputstream.close();
+        }
+        catch(IOException e) {
+            entityplayer.addChatMessage("IO exception while saving locations");
+            return;
+        }
+        sign.signText[2] = new StringBuilder().append("Distance: ").append(distance).toString();
+        sign.signText[3] = "Activated";
     }
     
     private void tryToTeleport(TileEntitySign sign, EntityPlayer entityplayer, World world, int i, int j, int k, int l)
     {
       if (sign.signText[0].equals("LOCATION")) {
         System.out.println("LOCATION");
-        if (!ensureLocationsAreLoaded(world, sign)) {
-          signFeedback(sign, "failure loading locations");
+        if (!ensureLocationsAreLoaded(world, entityplayer)) {
+          entityplayer.addChatMessage("failure loading locations");
           return;
         }
 
         // write new location
-        teleportLocations.setProperty(sign.signText[1], new StringBuilder().append(i).append(",").append(j).append(",").append(k).toString());
-        saveLocations(world, sign, teleportStrengthAt(world, i, j, k));
+        String name = sign.signText[1] + "," + entityplayer.dimension;
+        teleportLocations.setProperty(name, new StringBuilder().append(i).append(",").append(j).append(",").append(k).toString());
+        saveLocations(world, sign, entityplayer, teleportStrengthAt(world, i, j, k));
       }
       else if (sign.signText[0].equals("TELEPORT")) {
         System.out.println("TELEPORT");
-        if (!ensureLocationsAreLoaded(world, sign)) {
-          signFeedback(sign, "failure loading locations");
+        if (!ensureLocationsAreLoaded(world, entityplayer)) {
+          entityplayer.addChatMessage("failure loading locations");
           return;
         }
 
-        if (!teleportLocations.containsKey(sign.signText[1])) {
-          signFeedback(sign, "no such location");
+        String name = sign.signText[1] + "," + entityplayer.dimension;
+        if (!teleportLocations.containsKey(name)) {
+          entityplayer.addChatMessage("no such location");
           return;
         }
 
-        String[] unparsedCoordinates = teleportLocations.getProperty(sign.signText[1]).split(",");
+        String[] unparsedCoordinates = teleportLocations.getProperty(name).split(",");
         if (unparsedCoordinates.length != 3)
         {
-            signFeedback(sign, new StringBuilder().append("expected 3 coordinates, got ").append(unparsedCoordinates.length).toString());
+            entityplayer.addChatMessage(new StringBuilder().append("Broken save file: expected 3 coordinates, got ").append(unparsedCoordinates.length).toString());
             return;
         }
         int x, y, z;
@@ -148,52 +181,30 @@ public class ItemTeleportationKey extends Item
         }
         catch (NumberFormatException e)
         {
-            signFeedback(sign, "invalid number");
+            entityplayer.addChatMessage("Broken save file: number format exception");
             return;
         }
         double distance = Math.sqrt(Math.pow(x - entityplayer.posX, 2) + Math.pow(y - entityplayer.posY, 2) + Math.pow(z - entityplayer.posZ, 2));
-        System.out.println(new StringBuilder().append("distance: ").append(distance).toString());
+        //System.out.println(new StringBuilder().append("distance: ").append(distance).toString());
         int localStrength = teleportStrengthAt(world, i, j, k);
-        System.out.println(new StringBuilder().append("local strength: ").append(localStrength).toString());
+        //System.out.println(new StringBuilder().append("local strength: ").append(localStrength).toString());
         int maxDistance = teleportStrengthAt(world, x, y, z) + localStrength;
-        System.out.println(new StringBuilder().append("max distance: ").append(maxDistance).toString());
+        //System.out.println(new StringBuilder().append("max distance: ").append(maxDistance).toString());
         if (distance <= maxDistance) {
-            entityplayer.setPosition(x + 0.5, y + 1.7, z + 0.5);
+            entityplayer.setPositionAndUpdate(x + 0.5, y + 0.0, z + 0.5);
         }
         else {
-            signFeedback(sign, new StringBuilder().append("too weak by ").append(distance - maxDistance).toString());
+
+            entityplayer.addChatMessage(new StringBuilder().append("The pillar is too weak. Strengten it by ").append((int) Math.ceil(distance - maxDistance)).toString());
         }
 
       }
-      else if (sign.signText[0].equals("TELEPORT BY")) {
-        String[] unparsedCoordinates = sign.signText[1].split(",");
-        if (unparsedCoordinates.length != 3)
-        {
-            signFeedback(sign, new StringBuilder().append("expected 3 coordinates, got ").append(unparsedCoordinates.length).toString());
-            return;
-        }
-        int dx, dy, dz;
-        try
-        {
-            dx = Integer.parseInt(unparsedCoordinates[0]);
-            dy = Integer.parseInt(unparsedCoordinates[1]);
-            dz = Integer.parseInt(unparsedCoordinates[2]);
-        }
-        catch (NumberFormatException e)
-        {
-            signFeedback(sign, "invalid number");
-            return;
-        }
-        entityplayer.setPosition(entityplayer.posX + dx, entityplayer.posY + dy, entityplayer.posZ + dz);
-        signFeedback(sign, "");
+      else {
+          entityplayer.addChatMessage("Only \"LOCATION\" and \"TELEPORT\" commands are supported (as first line of a sign)");
       }
     }
 
-    private void signFeedback(TileEntitySign sign, String message) {
-      sign.signText[3] = message;
-    }
-
-    public static int teleportStrengthAt(World world, int x, int y, int z) {
+    private static int teleportStrengthAt(World world, int x, int y, int z) {
         int maxDistance = 0;
         int targetBlockId = world.getBlockId(x, y, z);
         if (targetBlockId == Block.signWall.blockID) {
@@ -267,7 +278,7 @@ public class ItemTeleportationKey extends Item
         return (int)Math.sqrt(count * 16);
     }
 
-    public static boolean isBlockSpecial(int blockId) {
+    private static boolean isBlockSpecial(int blockId) {
         return blockId == Block.blockSteel.blockID || blockId == Block.blockGold.blockID || blockId == Block.blockDiamond.blockID || blockId == Block.blockLapis.blockID || blockId == Block.glowStone.blockID || blockId == Block.pumpkin.blockID || blockId == Block.pumpkinLantern.blockID;
     }
 
