@@ -1,8 +1,24 @@
-package net.minecraft.src;
+package lt.kudlius.pillarteleporter;
 
 import java.io.*;
 import java.util.Properties;
 import net.minecraft.client.Minecraft;
+import net.minecraft.src.Block;
+import net.minecraft.src.World;
+import net.minecraft.src.WorldClient;
+import net.minecraft.src.TileEntity;
+import net.minecraft.src.TileEntitySign;
+import net.minecraft.src.EntityPlayer;
+import net.minecraft.src.EntityPlayerMP;
+import net.minecraft.src.ItemStack;
+import net.minecraft.src.Item;
+import net.minecraft.src.SaveHandler;
+import net.minecraft.src.ISaveHandler;
+import net.minecraft.src.MapStorage;
+import net.minecraft.src.Packet130UpdateSign;
+
+import java.lang.reflect.Field;
+import java.lang.IllegalAccessException;
 
 public class ItemTeleportationKey extends Item
 {
@@ -14,20 +30,18 @@ public class ItemTeleportationKey extends Item
     @Override
     public boolean onItemUse(ItemStack itemstack, EntityPlayer entityplayer, World world, int i, int j, int k, int l, float par8, float par9, float par10)
     {
+        //if (!world.isRemote) {
         if (world instanceof WorldClient) {
-            System.out.println("current world is instance of WorldClient. returning from onItemUse");
+            System.out.println("current world is not remote. returning from onItemUse");
             return false;
         }
-        System.out.println(new StringBuilder().append("teleportation key used! i=").append(i).append(", j=").append(j).append(", k=").append(k).append(", l=").append(l).toString());
+        System.out.println("current world is remote: " + world.isRemote);
+        //System.out.println(new StringBuilder().append("teleportation key used! i=").append(i).append(", j=").append(j).append(", k=").append(k).append(", l=").append(l).toString());
 
         TileEntity tileentity = world.getBlockTileEntity(i, j, k);
         if ((tileentity != null) && (tileentity instanceof TileEntitySign)) {
             System.out.println(new StringBuilder().append("metadata: ").append(world.getBlockMetadata(i, j, k)).toString());
             TileEntitySign sign = (TileEntitySign) tileentity;
-            for (int a = 0; a < sign.signText.length; a++)
-            {
-                System.out.println(sign.signText[a]);
-            }
             tryToTeleport(sign, entityplayer, world, i, j, k, l);
         }
         return false;
@@ -59,27 +73,20 @@ public class ItemTeleportationKey extends Item
     */
 
     private File getSaveDirectory(World world) {
-        try {
-            SaveHandler saveHandler = (SaveHandler) ModLoader.getPrivateValue(MapStorage.class, world.mapStorage, 0); //"saveHandler"
-            if (saveHandler == null) {
-                System.out.println("saveHandler is null");
-                if (world instanceof WorldClient) {
-                    System.out.println("WorldClient had that null issue");
-                }
-                else if (world instanceof WorldServer) {
-                    System.out.println("WorldServer had that null issue");
-                }
-                return null;
-            }
-            else {
-                System.out.println("saveHandler looks ok");
-            }
-            //File saveDirectory = new File(Minecraft.getMinecraftDir(), "/saves/" + saveHandler.getSaveDirectoryName());
-            File saveDirectory = (File) ModLoader.getPrivateValue(SaveHandler.class, saveHandler, 1); //"saveDirectory"
-            return saveDirectory;
+        ISaveHandler saveHandler = world.getSaveHandler();
+        if (saveHandler == null) {
+            System.out.println("saveHandler is null");
+            return null;
         }
-        catch(NoSuchFieldException e) {
-            System.out.println("no such field exception");
+        else {
+            System.out.println("saveHandler looks ok");
+        }
+        Field f = SaveHandler.class.getDeclaredFields()[1];
+        f.setAccessible(true);
+        try {
+            return (File) f.get(saveHandler);
+        }
+        catch (IllegalAccessException e) {
             return null;
         }
     }
@@ -95,7 +102,7 @@ public class ItemTeleportationKey extends Item
         currentSaveDirName = dir.getPath();
         System.out.println("Save dir name: " + currentSaveDirName);
 
-        File file = new File(dir, "KudliusTeleporter.teleportLocations.cfg");
+        File file = new File(dir, LOCATIONS_FILENAME);
         try {
             if(!file.exists())
             {
@@ -124,7 +131,7 @@ public class ItemTeleportationKey extends Item
         else {
             System.out.println("locations saved");
         }
-        File file = new File(dir, "KudliusTeleporter.teleportLocations.cfg");
+        File file = new File(dir, LOCATIONS_FILENAME);
         // of course file exists
         try {
             FileOutputStream fileoutputstream = new FileOutputStream(file);
@@ -137,12 +144,17 @@ public class ItemTeleportationKey extends Item
         }
         sign.signText[2] = new StringBuilder().append("Distance: ").append(distance).toString();
         sign.signText[3] = "Activated";
+
+        //System.out.println("is sign editable: " + sign.isEditable());
+
+        sign.setEditable(true);
+        ((EntityPlayerMP) entityplayer).playerNetServerHandler.handleUpdateSign(new Packet130UpdateSign(sign.xCoord, sign.yCoord, sign.zCoord, sign.signText));
+        sign.setEditable(false);
     }
     
     private void tryToTeleport(TileEntitySign sign, EntityPlayer entityplayer, World world, int i, int j, int k, int l)
     {
       if (sign.signText[0].equals("LOCATION")) {
-        System.out.println("LOCATION");
         if (!ensureLocationsAreLoaded(world, entityplayer)) {
           entityplayer.addChatMessage("failure loading locations");
           return;
@@ -154,7 +166,6 @@ public class ItemTeleportationKey extends Item
         saveLocations(world, sign, entityplayer, teleportStrengthAt(world, i, j, k));
       }
       else if (sign.signText[0].equals("TELEPORT")) {
-        System.out.println("TELEPORT");
         if (!ensureLocationsAreLoaded(world, entityplayer)) {
           entityplayer.addChatMessage("failure loading locations");
           return;
@@ -185,11 +196,8 @@ public class ItemTeleportationKey extends Item
             return;
         }
         double distance = Math.sqrt(Math.pow(x - entityplayer.posX, 2) + Math.pow(y - entityplayer.posY, 2) + Math.pow(z - entityplayer.posZ, 2));
-        //System.out.println(new StringBuilder().append("distance: ").append(distance).toString());
         int localStrength = teleportStrengthAt(world, i, j, k);
-        //System.out.println(new StringBuilder().append("local strength: ").append(localStrength).toString());
         int maxDistance = teleportStrengthAt(world, x, y, z) + localStrength;
-        //System.out.println(new StringBuilder().append("max distance: ").append(maxDistance).toString());
         if (distance <= maxDistance) {
             entityplayer.setPositionAndUpdate(x + 0.5, y + 0.0, z + 0.5);
         }
@@ -284,4 +292,5 @@ public class ItemTeleportationKey extends Item
 
     private static String currentSaveDirName; // safeguard for multiple worlds
     private static Properties teleportLocations = new Properties();
+    private static final String LOCATIONS_FILENAME = "PillarTeleporterLocations.cfg";
 }
