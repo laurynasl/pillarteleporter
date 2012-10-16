@@ -25,7 +25,7 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.ObfuscationReflectionHelper;
 
-@Mod(modid = "PillarTeleporter", name = "PillarTeleporter", version = "1.3.2.1")
+@Mod(modid = "PillarTeleporter", name = "PillarTeleporter", version = "1.3.2.2")
 @NetworkMod(clientSideRequired = true, serverSideRequired = true)
 public class PillarTeleporter
 {
@@ -91,7 +91,7 @@ public class PillarTeleporter
         //teleportationKey.setIconIndex(1);
         LanguageRegistry.addName(teleportationKey, "Teleportation Key");
         //teleportationKey.setIconIndex(ModLoader.addOverride("/gui/items.png", "/gui/teleportationKey.png"));
-        teleportationKey.setIconIndex(RenderingRegistry.addTextureOverride("/gui/items.png", "/gui/teleportationKey.png"));
+        teleportationKey.setIconIndex(RenderingRegistry.addTextureOverride("/gui/items.png", "/lt/kudlius/pillarteleporter/items.png"));
         //ModLoader.addName(teleportationKey, "Teleportation Key");
 
         // teleportation key creation recipe
