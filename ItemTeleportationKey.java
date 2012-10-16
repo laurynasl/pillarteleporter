@@ -16,12 +16,20 @@ import net.minecraft.src.SaveHandler;
 import net.minecraft.src.ISaveHandler;
 import net.minecraft.src.MapStorage;
 import net.minecraft.src.Packet130UpdateSign;
+import net.minecraft.src.InventoryPlayer;
+import net.minecraft.src.NBTTagCompound;
+import net.minecraft.src.Potion;
+import net.minecraft.src.PotionEffect;
+import cpw.mods.fml.common.ObfuscationReflectionHelper;
 
 import java.lang.reflect.Field;
 import java.lang.IllegalAccessException;
+import java.util.TreeMap;
 
 public class ItemTeleportationKey extends Item
 {
+    public static TreeMap<String, Integer> chargesMap;
+
     public ItemTeleportationKey(int i)
     {
         super(i);
@@ -32,43 +40,129 @@ public class ItemTeleportationKey extends Item
     {
         //if (!world.isRemote) {
         if (world instanceof WorldClient) {
-            System.out.println("current world is not remote. returning from onItemUse");
-            return false;
+            //System.out.println("current world is not remote. returning from onItemUse");
+            return true;
         }
         System.out.println("current world is remote: " + world.isRemote);
         //System.out.println(new StringBuilder().append("teleportation key used! i=").append(i).append(", j=").append(j).append(", k=").append(k).append(", l=").append(l).toString());
 
         TileEntity tileentity = world.getBlockTileEntity(i, j, k);
         if ((tileentity != null) && (tileentity instanceof TileEntitySign)) {
-            System.out.println(new StringBuilder().append("metadata: ").append(world.getBlockMetadata(i, j, k)).toString());
+            //System.out.println(new StringBuilder().append("metadata: ").append(world.getBlockMetadata(i, j, k)).toString());
             TileEntitySign sign = (TileEntitySign) tileentity;
-            tryToTeleport(sign, entityplayer, world, i, j, k, l);
+            tryToTeleport(sign, entityplayer, itemstack, world, i, j, k, l);
         }
-        return false;
+        return true;
+    }
+
+    @Override
+    public ItemStack onItemRightClick(ItemStack itemstack, World world, EntityPlayer entityplayer)
+    {
+        int consumableIndex = entityplayer.inventory.currentItem + 3 * InventoryPlayer.func_70451_h();
+        ItemStack consumableStack = entityplayer.inventory.mainInventory[consumableIndex];
+        if (consumableStack == null) {
+            if (!world.isRemote) {
+                entityplayer.addChatMessage("No consumable");
+            }
+        }
+        else {
+            int charge = 0;
+
+            String exactKey = "" + consumableStack.getItem().shiftedIndex + "_" + consumableStack.getItemDamage();
+            String generalKey = "" + consumableStack.getItem().shiftedIndex + "_-1";
+            if (chargesMap.containsKey(exactKey)) {
+                charge = chargesMap.get(exactKey);
+            }
+            else if (chargesMap.containsKey(generalKey)) {
+                charge = chargesMap.get(generalKey);
+            }
+
+            if (charge > 0) {
+                if (increaseCharge(charge, itemstack)) {
+                    if (!world.isRemote) {
+                        entityplayer.addChatMessage("Consuming " + consumableStack.getItem().getItemDisplayName(consumableStack));
+                    }
+                    --consumableStack.stackSize;
+                    if (consumableStack.stackSize <= 0) {
+                        entityplayer.inventory.mainInventory[consumableIndex] = null;
+                    }
+                }
+                else {
+                    if (!world.isRemote) {
+                        entityplayer.addChatMessage("teleportation key is full");
+                    }
+                }
+            }
+        }
+
+        return itemstack;
+    }
+
+    @Override
+    public String getItemDisplayName(ItemStack itemstack) {
+        if (ObfuscationReflectionHelper.obfuscation) {
+            return super.getItemDisplayName(itemstack);
+        }
+        else {
+            return super.getItemDisplayName(itemstack) + " charge: " + getCharge(itemstack) + " damage: " + itemstack.getItemDamage();
+        }
     }
 
     /*
     @Override
-    public ItemStack onItemRightClick(ItemStack itemstack, World world, EntityPlayer entityplayer)
-    {
-        System.out.println(new StringBuilder().append("teleportation key right clicked!").toString());
+    public void onCreated(ItemStack itemstack, World world, EntityPlayer entityplayer) {
+        setCharge(0, itemstack);
+    }
+    */
 
-        System.out.println(getSaveDirectory(world).getPath());
 
-        ItemStack[] inventory = entityplayer.inventory.mainInventory;
-        for (int i = 0; i < inventory.length; i++) {
-            if(inventory[i] != null) {
-                if (inventory[i].itemID == Item.coal.shiftedIndex) {
-                    System.out.println(new StringBuilder().append(inventory[i].stackSize).append(" coal!").toString());
-                }
-                //System.out.println(new StringBuilder().append("found").append(inventory[i].itemID).append(" at ").append(i).toString());
-          }
-          else {
-              //System.out.println(new StringBuilder().append("none at ").append(i).toString());
-          }
+    private boolean decreaseCharge(int amount, ItemStack itemstack) {
+        int charge = getCharge(itemstack);
+        if (amount > charge) {
+            return false;
         }
+        else {
+            setCharge(charge - amount, itemstack);
+            return true;
+        }
+    }
 
-        return itemstack;
+    private boolean increaseCharge(int amount, ItemStack itemstack) {
+        int charge = getCharge(itemstack);
+        if (charge + amount <= getMaxDamage()) {
+            setCharge(charge + amount, itemstack);
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    private int getCharge(ItemStack itemstack) {
+        /*
+        ensureChargeIsInCompound(itemstack);
+        return itemstack.getTagCompound().getInteger("charge");
+        */
+        return getMaxDamage() - itemstack.getItemDamage();
+    }
+
+    private void setCharge(int amount, ItemStack itemstack) {
+        /*
+        ensureChargeIsInCompound(itemstack);
+        itemstack.getTagCompound().setInteger("charge", amount);
+        */
+        itemstack.setItemDamage(getMaxDamage() - amount);
+    }
+
+    /*
+    private void ensureChargeIsInCompound(ItemStack itemstack) {
+        if (!itemstack.hasTagCompound()) {
+            itemstack.setTagCompound(new NBTTagCompound());
+        }
+        NBTTagCompound tag = itemstack.getTagCompound();
+        if (!tag.hasKey("charge")) {
+            tag.setInteger("charge", 0);
+        }
     }
     */
 
@@ -152,7 +246,7 @@ public class ItemTeleportationKey extends Item
         sign.setEditable(false);
     }
     
-    private void tryToTeleport(TileEntitySign sign, EntityPlayer entityplayer, World world, int i, int j, int k, int l)
+    private void tryToTeleport(TileEntitySign sign, EntityPlayer entityplayer, ItemStack teleportationKeyStack, World world, int i, int j, int k, int l)
     {
       if (sign.signText[0].equals("LOCATION")) {
         if (!ensureLocationsAreLoaded(world, entityplayer)) {
@@ -195,15 +289,21 @@ public class ItemTeleportationKey extends Item
             entityplayer.addChatMessage("Broken save file: number format exception");
             return;
         }
-        double distance = Math.sqrt(Math.pow(x - entityplayer.posX, 2) + Math.pow(y - entityplayer.posY, 2) + Math.pow(z - entityplayer.posZ, 2));
+        int distance = (int) Math.ceil(Math.sqrt(Math.pow(x - entityplayer.posX, 2) + Math.pow(y - entityplayer.posY, 2) + Math.pow(z - entityplayer.posZ, 2)));
         int localStrength = teleportStrengthAt(world, i, j, k);
         int maxDistance = teleportStrengthAt(world, x, y, z) + localStrength;
         if (distance <= maxDistance) {
-            entityplayer.setPositionAndUpdate(x + 0.5, y + 0.0, z + 0.5);
+            if (decreaseCharge(distance, teleportationKeyStack)) {
+                entityplayer.setPositionAndUpdate(x + 0.5, y + 0.0, z + 0.5);
+                entityplayer.addPotionEffect(new PotionEffect(Potion.confusion.id, distance, 0));
+            }
+            else {
+                entityplayer.addChatMessage("Not enough charge at teleportation key");
+            }
         }
         else {
 
-            entityplayer.addChatMessage(new StringBuilder().append("The pillar is too weak. Strengten it by ").append((int) Math.ceil(distance - maxDistance)).toString());
+            entityplayer.addChatMessage(new StringBuilder().append("The pillar is too weak. Strengten it by ").append(distance - maxDistance).toString());
         }
 
       }
