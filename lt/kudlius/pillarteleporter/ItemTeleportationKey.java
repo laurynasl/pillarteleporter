@@ -56,6 +56,23 @@ public class ItemTeleportationKey extends Item
     @Override
     public ItemStack onItemRightClick(ItemStack itemstack, World world, EntityPlayer entityplayer)
     {
+        consumeFuel(itemstack, world, entityplayer, 1);
+        return itemstack;
+    }
+
+    @Override
+    public String getItemDisplayName(ItemStack itemstack) {
+        if (ObfuscationReflectionHelper.obfuscation) {
+            return super.getItemDisplayName(itemstack);
+        }
+        else {
+            return super.getItemDisplayName(itemstack) + " charge: " + getCharge(itemstack) + " damage: " + itemstack.getItemDamage();
+        }
+    }
+
+    /* consumes fuel directly above teleportation key. minimumCharge - minimum charge to consume
+     * */
+    private void consumeFuel(ItemStack itemstack, World world, EntityPlayer entityplayer, int minimumCharge) {
         int consumableIndex = entityplayer.inventory.currentItem + 3 * InventoryPlayer.func_70451_h();
         ItemStack consumableStack = entityplayer.inventory.mainInventory[consumableIndex];
         if (consumableStack == null) {
@@ -76,33 +93,36 @@ public class ItemTeleportationKey extends Item
             }
 
             if (charge > 0) {
-                if (increaseCharge(charge, itemstack)) {
-                    if (!world.isRemote) {
-                        entityplayer.addChatMessage("Consuming " + consumableStack.getItem().getItemDisplayName(consumableStack));
+                if (minimumCharge > getMaxDamage()) {
+                    minimumCharge = getMaxDamage();
+                }
+                int count = (minimumCharge + charge - 1) / charge;
+                if (count > consumableStack.stackSize) {
+                    count = consumableStack.stackSize;
+                }
+
+                if (count > 0) {
+                    if (increaseCharge(charge, itemstack)) {
+                        if (!world.isRemote) {
+                            entityplayer.addChatMessage("Consuming " + count + " " + consumableStack.getItem().getItemDisplayName(consumableStack));
+                        }
+                        consumableStack.stackSize -= count;
+                        if (consumableStack.stackSize <= 0) {
+                            entityplayer.inventory.mainInventory[consumableIndex] = null;
+                        }
                     }
-                    --consumableStack.stackSize;
-                    if (consumableStack.stackSize <= 0) {
-                        entityplayer.inventory.mainInventory[consumableIndex] = null;
+                    else {
+                        if (!world.isRemote) {
+                            entityplayer.addChatMessage("teleportation key is full");
+                        }
                     }
                 }
                 else {
                     if (!world.isRemote) {
-                        entityplayer.addChatMessage("teleportation key is full");
+                        entityplayer.addChatMessage("count to consume is 0 (this should not happen in a normal game)");
                     }
                 }
             }
-        }
-
-        return itemstack;
-    }
-
-    @Override
-    public String getItemDisplayName(ItemStack itemstack) {
-        if (ObfuscationReflectionHelper.obfuscation) {
-            return super.getItemDisplayName(itemstack);
-        }
-        else {
-            return super.getItemDisplayName(itemstack) + " charge: " + getCharge(itemstack) + " damage: " + itemstack.getItemDamage();
         }
     }
 
@@ -179,6 +199,10 @@ public class ItemTeleportationKey extends Item
                 TeleportationHelper.teleportStrengthAt(world, i, j, k) + 
                 TeleportationHelper.teleportStrengthAt(world, x, y, z);
             if (distance <= maxDistance) {
+                int charge = getCharge(teleportationKeyStack);
+                if (distance > charge) {
+                    consumeFuel(teleportationKeyStack, world, entityplayer, distance - charge);
+                }
                 if (decreaseCharge(distance, teleportationKeyStack)) {
                     TeleportationHelper.teleport(entityplayer, x, y, z);
                 }
