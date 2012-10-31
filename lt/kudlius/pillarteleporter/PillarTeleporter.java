@@ -26,7 +26,7 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.ObfuscationReflectionHelper;
 import cpw.mods.fml.common.SidedProxy;
 
-@Mod(modid = "PillarTeleporter", name = "PillarTeleporter", version = "1.3.2.3")
+@Mod(modid = "PillarTeleporter", name = "PillarTeleporter", version = "1.4.2.6")
 @NetworkMod(clientSideRequired = true, serverSideRequired = true)
 public class PillarTeleporter
 {
@@ -50,18 +50,18 @@ public class PillarTeleporter
         Configuration cfg = new Configuration(event.getSuggestedConfigurationFile());
         try {
             cfg.load();
-            Property teleportationKeyProperty = cfg.getOrCreateIntProperty("teleportationKey", Configuration.CATEGORY_ITEM, 31373);
+            Property teleportationKeyProperty = cfg.get(Configuration.CATEGORY_ITEM, "teleportationKey", 31373);
             teleportationKeyProperty.comment = "Teleportation key";
             teleportationKeyID = teleportationKeyProperty.getInt();
 
-            Property escapeKeyProperty = cfg.getOrCreateIntProperty("escapeKey", Configuration.CATEGORY_ITEM, 31374);
+            Property escapeKeyProperty = cfg.get(Configuration.CATEGORY_ITEM, "escapeKey", 31374);
             escapeKeyProperty.comment = "Escape key";
             escapeKeyID = escapeKeyProperty.getInt();
 
             final String category_name = "teleportation_consumables";
 
-            //if (!cfg.hasCategory(category_name)) { // BACKPORT
-            if (cfg.categories.get(category_name) == null) {
+            if (!cfg.hasCategory(category_name)) { // BACKPORT
+            //if (cfg.categories.get(category_name) == null) {
                 ItemStack[] defaultTeleportationConsumables = new ItemStack[]{
                     new ItemStack(Item.dyePowder, 1000, 4),
                     new ItemStack(Item.coal, 300, 0),
@@ -70,7 +70,7 @@ public class PillarTeleporter
                 };
                 for (int i = 0; i < defaultTeleportationConsumables.length; i++) {
                     ItemStack stack = defaultTeleportationConsumables[i];
-                    Property property = cfg.getOrCreateIntProperty("" + stack.getItem().shiftedIndex + "_" + stack.getItemDamage(), category_name, stack.stackSize);
+                    Property property = cfg.get(category_name, "" + stack.getItem().shiftedIndex + "_" + stack.getItemDamage(), stack.stackSize);
                 }
             }
 

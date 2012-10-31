@@ -102,7 +102,7 @@ public class ItemTeleportationKey extends Item
                 }
 
                 if (count > 0) {
-                    if (increaseCharge(charge, itemstack)) {
+                    if (increaseCharge(charge * count, itemstack)) {
                         if (!world.isRemote) {
                             entityplayer.addChatMessage("Consuming " + count + " " + consumableStack.getItem().getItemDisplayName(consumableStack));
                         }
