@@ -26,7 +26,7 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.ObfuscationReflectionHelper;
 import cpw.mods.fml.common.SidedProxy;
 
-@Mod(modid = "PillarTeleporter", name = "PillarTeleporter", version = "1.4.4.7")
+@Mod(modid = "PillarTeleporter", name = "PillarTeleporter", version = "1.4.5.8")
 @NetworkMod(clientSideRequired = true, serverSideRequired = true)
 public class PillarTeleporter
 {
